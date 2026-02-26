@@ -46,6 +46,9 @@ REB_RONE, STAT_MOLIT, ECOS, HOUSTAT, MOIS, DATA_GO_KR
 - LAND_SALE: 1,732건, 1개 지역만 존재 (수집 미도달, P2)
 - 202303 APT 급증: API 제공범위 변경 추정, 시계열 비교 시 경계 인지 필요
 - fact_indicator_month: 테스트 데이터만, Landbrief ETL로 재수집 예정
+- MOIS 인구/세대: PID 1299217 진행 중 (268개 시군구 × 40개월, 202209~202512, 예상 5시간)
+- MOIS API 제공 시작: 2022-09 (2016~2022-08은 jumin.mois.go.kr CSV 후순위)
+
 
 ## DDL
 - v0.2 사실상 확정 (Codex #003 검증 5건 통과, dedup 전수 검증 12종 중복 0건)
@@ -68,6 +71,7 @@ REB_RONE, STAT_MOLIT, ECOS, HOUSTAT, MOIS, DATA_GO_KR
 - KB 미검증 2종 (P3) — KB_PRICE_INDEX_MONTHLY, KB_PIR
 - 비아파트 dedup 키 과소정의 (Phase 2 전 분석)
 - 신고 지연 데이터 재수집 전략 (P3) — 슬라이딩 윈도우 N개월, ETL 설계 시 결정
+- fact_indicator_month SQLite 스키마 차이 (P3) — inserted_at/updated_at NOT NULL DEFAULT 없음, source CHECK 목록 Landbrief DDL과 불일치
 
 ## 태스크
 G1 ✅ | G2 DDL ✅ (확정 대기, PG 설치 후 적용) | G3~G10 대기
@@ -75,15 +79,15 @@ G1 ✅ | G2 DDL ✅ (확정 대기, PG 설치 후 적용) | G3~G10 대기
 ## 다음 세션 작업 (우선순위 순)
 
 ### 최우선 (3/5 전)
-1. daily_check.sh 서버 배포 + cron 등록
-2. 실거래가 12종 수집 완료 + 검증 (PID 980574 완료 대기)
-3. 인구 수집 스크립트 (MOIS API, 시군구/월별 2016~2025)
-4. 미분양 수집 스크립트 (STAT_MOLIT API, 시군구/월별 2016~2025)
+  1. MOIS 인구 수집 완료 검증
+  2. 실거래가 12종 수집 완료 + 검증 (PID 980574)
+  3. 미분양 수집 스크립트 (STAT_MOLIT API, 별도 키, 긴급도 낮음)
 
 ### 후순위
-5. SUPPLY_INCOMING 소스 확정
-6. KB 평단가 10년치 수집 스크립트
-7. PostgreSQL 설치 + DDL v0.2 적용 + 이관
+  4. MOIS 인구 CSV 2016~2022-08 (17시도 × 2회 = 34회 다운로드 + 파싱)
+  5. SUPPLY_INCOMING 소스 확정
+  6. KB 평단가 10년치 수집 스크립트
+  7. PostgreSQL 설치 + DDL v0.2 적용 + 이관
 
 ## 코드 컨벤션
 - DB 접속: 단일 connect() 강제
@@ -128,3 +132,27 @@ G1 ✅ | G2 DDL ✅ (확정 대기, PG 설치 후 적용) | G3~G10 대기
 - INTENT.md v0.4 작성
 - HANDOVER v003 작성
 - **다음: daily_check.sh 배포 → 실거래 12종 수집 완료+검증 → 인구/미분양 수집(3/5전 긴급) → PostgreSQL 이관은 후순위**
+
+## 2026-02-26 #008
+- daily_check.sh 서버 배포 완료
+  - 11개 항목 검증 스크립트, cron 매일 09:00 KST 등록
+  - dim_region 컬럼명 불일치 수정 (sgg_cd → region_code)
+  - 미매칭 시군구 쿼리 정상 동작 확인
+- MOIS 인구 API 조사
+  - 현재 API(stdgPpltnHhStus): 2022-09부터만 데이터 제공 (2022-11 신규 등록)
+  - 2016~2022-08: jumin.mois.go.kr CSV 다운로드 또는 KOSIS API 대체 필요
+  - CSV: 시도 단위 60개월 제한, 17시도 × 2회 = 34회 수동 다운로드
+  - EUC-KR 인코딩, 행정기관코드 10자리(앞 5자리=시군구코드)
+- MOIS 인구 전국 수집 실행
+  - PID 1299217, 268개 시군구 × 202209~202512 (40개월)
+  - 시군구당 ~70초, 예상 완료 약 5시간
+  - 1차 실행 실패: fact_indicator_month.inserted_at NOT NULL DEFAULT 없음
+  - 스크립트 수정 후 재실행, 정상 적재 확인 (종로구 80건)
+  - API 호출 한도: 3,752회 예상, 실거래+인구 합산 일일 45K+회인데 제한 미발동
+- UNSOLD 미분양 확인
+  - MOLIT_STAT_API_KEY 별도 키, 3/5 DATA_GO_KR 한도 축소와 무관
+  - 기존 api_molit.py에 fetch_unsold_by_sigungu 존재, 전국 일괄 반환 구조
+- fact_indicator_month SQLite 스키마 확인
+  - inserted_at/updated_at NOT NULL (DEFAULT 없음)
+  - source CHECK: MOLIT_TRADE, STAT_MOLIT, REB_RONE, HOUSTAT, HF_HOUSTAT, HF_ODCLOUD 등 Landbrief DDL과 상이
+- **다음: MOIS 수집 완료 검증 → 실거래 12종 완료 검증 → 미분양 수집 → CSV 인구 후순위**
