@@ -8,3 +8,6 @@ reports/*.pdf
 .venv/
 venv/
 node_modules/
+
+_ref_landscanner/
+temp/
