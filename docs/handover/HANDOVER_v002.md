@@ -1,5 +1,7 @@
 # Landbrief Handover v002 (2026-02-26)
 
+**블록 1: HANDOVER(기반 문서)**
+
 ## 문서 체계
 - INTENT.md: 프로젝트 정의/원칙/범위/지표 상세. 심화 작업 시 공유.
 - HANDOVER: 현재 상태. 매 세션 공유.
