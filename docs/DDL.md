@@ -16,11 +16,11 @@ CREATE TYPE trade_type_enum AS ENUM (
 );
 
 CREATE TYPE source_enum AS ENUM (
-    'REB_RONE', 'STAT_MOLIT', 'ECOS', 'HOUSTAT', 'MOIS', 'DATA_GO_KR'
+    'REB_RONE', 'STAT_MOLIT', 'ECOS', 'HOUSTAT', 'MOIS', 'DATA_GO_KR', 'KB'
 );
 
 CREATE TYPE region_level_enum AS ENUM (
-    'GLOBAL', 'SIDO', 'SIGUNGU'
+    'GLOBAL', 'SIDO', 'SIGUNGU', 'ZONE'
 );
 
 CREATE TYPE etl_status_enum AS ENUM (
