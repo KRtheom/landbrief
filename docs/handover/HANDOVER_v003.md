@@ -4,6 +4,8 @@
 
 **블록 1: HANDOVER(기반 문서)**
 
+> **⚠ 수정 규칙**: 수정사항 안내 시 반드시 **섹션 단위**로 전체 교체 블록을 마크다운 원문으로 제공할 것. 줄 단위 지시, 화살표(→) 표기, diff 형식 금지.
+
 ## 문서 체계
 - INTENT.md (v0.4): 프로젝트 정의/원칙/범위/지표/3트랙 상세. 심화 작업 시 공유.
 - HANDOVER: 현재 상태. 매 세션 공유.
@@ -37,18 +39,25 @@ APT_SALE_DTL, APT_RENT, REB_SALE_PRICE_INDEX, REB_TRADE_VOLUME, REB_RENT_PRICE_I
 검증완료 8종: KB_AVG_PRICE_PER_SQM, KB_PRICE_INDEX_CHANGE, KB_JEONSE_RATIO, KB_RENT_CONVERSION, KB_BUYER_INDEX, KB_PRICE_OUTLOOK, KB_MEDIAN_PRICE, KB_SIZE_PRICE_INDEX
 미검증 2종: KB_PRICE_INDEX_MONTHLY (파라미터 재확인), KB_PIR (메뉴코드 누락)
 
-## source CHECK 6종
-REB_RONE, STAT_MOLIT, ECOS, HOUSTAT, MOIS, DATA_GO_KR
+## source CHECK 7종
+REB_RONE, STAT_MOLIT, ECOS, HOUSTAT, MOIS, DATA_GO_KR, KB
 
-## 수집 현황
-- APT 2종: 완료 (78개월, 201909~202602, 이관 시 202001 이전 제외)
-- 10종 74개월: PID 980574 진행 중 (13,168,180건, 11종 완료, RH_RENT 수집 중)
-- LAND_SALE: 1,732건, 1개 지역만 존재 (수집 미도달, P2)
-- 202303 APT 급증: API 제공범위 변경 추정, 시계열 비교 시 경계 인지 필요
-- fact_indicator_month: 테스트 데이터만, Landbrief ETL로 재수집 예정
-- MOIS 인구/세대: PID 1299217 진행 중 (268개 시군구 × 40개월, 202209~202512, 예상 5시간)
-- MOIS API 제공 시작: 2022-09 (2016~2022-08은 jumin.mois.go.kr CSV 후순위)
+## 수집 현황 (2026-02-27 기준)
 
+| 데이터 | 상태 | 비고 |
+|---|---|---|
+| 실거래 12종 | 83.3% (165,220/198,320) | API 일일한도 도달, 익일 재실행 |
+| MOIS 인구/세대 | 완료 (264/268) | 화성 분구 4건 빈 응답 (정상) |
+| ECOS 경제지표 | 완료 | 기준금리, CPI, CSI, ESI |
+| HF 지표 | 테스트 수준 | PIR 19건, KHAI 2건 |
+| UNSOLD 미분양 | 테스트 수준 | 11건 |
+| KB 지표 | 미착수 | 메뉴코드 미확인 |
+
+- 실거래 APT 2종: 78개월 완료 (201909~202602), 나머지 10종 진행 중
+- LAND_SALE: 15개 시군구만 수집 (가장 느림)
+- MOIS API 제공 시작: 2022-09 (2016~2022-08은 CSV 34회 수동 다운로드 후순위)
+- 강원(51xxx) 2023-06~, 전북(52xxx) 2024-01~, 구 코드(42xxx/45xxx) 데이터 공존
+- fact_indicator_month: LandScanner 테스트 데이터, Landbrief ETL로 재수집 예정
 
 ## DDL
 - v0.2 사실상 확정 (Codex #003 검증 5건 통과, dedup 전수 검증 12종 중복 0건)
@@ -72,6 +81,7 @@ REB_RONE, STAT_MOLIT, ECOS, HOUSTAT, MOIS, DATA_GO_KR
 - 비아파트 dedup 키 과소정의 (Phase 2 전 분석)
 - 신고 지연 데이터 재수집 전략 (P3) — 슬라이딩 윈도우 N개월, ETL 설계 시 결정
 - fact_indicator_month SQLite 스키마 차이 (P3) — inserted_at/updated_at NOT NULL DEFAULT 없음, source CHECK 목록 Landbrief DDL과 불일치
+- 강원/전북 행정코드 변경 매핑 (P2) — dim_region에 신규 코드(51xxx/52xxx)만 존재, 구 코드(42xxx/45xxx) 없음. 리포트 시계열 연결 시 구→신 매핑 필수. 화성시 분구(41591~41597)도 동일 패턴.
 
 ## 태스크
 G1 ✅ | G2 DDL ✅ (확정 대기, PG 설치 후 적용) | G3~G10 대기
@@ -156,3 +166,36 @@ G1 ✅ | G2 DDL ✅ (확정 대기, PG 설치 후 적용) | G3~G10 대기
   - inserted_at/updated_at NOT NULL (DEFAULT 없음)
   - source CHECK: MOLIT_TRADE, STAT_MOLIT, REB_RONE, HOUSTAT, HF_HOUSTAT, HF_ODCLOUD 등 Landbrief DDL과 상이
 - **다음: MOIS 수집 완료 검증 → 실거래 12종 완료 검증 → 미분양 수집 → CSV 인구 후순위**
+
+### #009 – 2026-02-27 (Session 9)
+
+**환경 / 도구**
+- VS Code Remote-SSH 설정 완료 (analytics-srv 접속)
+- SQLite Viewer, Markdown Preview Enhanced, Git Graph 확장 설치
+- 계정 SSH 키 GitHub 등록 → 서버에서 직접 push 가능
+
+**Agent Skills 3종 생성**
+- `.github/skills/db-schema/SKILL.md` – DB 스키마 정의 (fact_trade_raw 실제 스키마 반영)
+- `.github/skills/api-collector/SKILL.md` – API 수집 패턴 정의
+- `.github/skills/coding-rules/SKILL.md` – 코딩 규칙 및 데이터 규격
+
+**데이터 수집 현황**
+- 실거래 12종: 83.3% 완료 (165,220 / 198,320 호출), API 일일한도 도달로 내일 재실행
+- MOIS 인구: 264/268 성공, 4건 빈 응답 (화성 분구 신설 자치구 — 정상)
+- 강원(51xxx) 2023-06~, 전북(52xxx) 2024-01~, 구 코드(42xxx/45xxx) 데이터 공존 확인
+
+**Git 정리**
+- 서버 계정 SSH 키 등록 (read-only Deploy Key → 계정 키 전환)
+- 테스트 xlsx 4건 삭제, test_starts.json .gitignore 추가
+- 커밋: 6286a14, 730c558, 61de45c, 97e87c5
+
+**확인된 이슈**
+- fact_trade_raw 스키마와 SKILL.md 불일치 → 수정 완료
+- API 일일한도(429 Too Many Requests) → 익일 재실행으로 해결
+
+### 다음 세션 (Session 10)
+1. 실거래 수집 재실행 (남은 33,100건)
+2. 수집 완료 후 전체 데이터 검증
+3. UNSOLD 미분양 수집 스크립트 실행 (MOLIT_STAT API)
+4. CSV 인구 다운로드 계획 확정 (2016~2022-08, 34회)
+5. db-schema SKILL.md fact_indicator_month 스키마 실제 확인 및 수정
