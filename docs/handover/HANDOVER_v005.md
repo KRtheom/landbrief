@@ -32,7 +32,7 @@ Ubuntu 24.04, i7-10700, 32GB, ssh -p 2222 deploy@122.45.64.200
 
 ## Git
 - LandScanner: github.com/KRtheom/real-estate-report.git (private)
-- Landbrief: 저장소 미생성, 첫 커밋 cf3d336
+- Landbrief: github.com/KRtheom/landbrief (private)
 
 ## 확정 12종 지표 (공인기관)
 APT_SALE_DTL, APT_RENT, REB_SALE_PRICE_INDEX, REB_TRADE_VOLUME, REB_RENT_PRICE_INDEX, UNSOLD_UNITS_SIGUNGU, UNSOLD_UNITS_COMPLETED, MACRO_BASE_RATE, HF_PIR(드랍), DEMO_POPULATION, DEMO_HOUSEHOLD, SUPPLY_INCOMING
@@ -76,7 +76,7 @@ REB_RONE, STAT_MOLIT, ECOS, HOUSTAT, MOIS, DATA_GO_KR, KB, APPLYHOME
 | 데이터 | 상태 | 비고 |
 |---|---|---|
 | 실거래 11종 | 완료 (각 19,832건 OK) | 429 피해 없음 확인 |
-| 실거래 LAND_SALE | 미완 (OK 2,005 / PENDING 972 / 미실행 ~16,855) | 429 코드 수정 완료, 재수집 cron 미설정 |
+| 실거래 LAND_SALE | 미완 (OK 2,005 / PENDING 972 / 미실행 ~16,855) | cron 설정 완료 (매일 00:05 KST, --max-calls 990), 일 1,000건 한도 |
 | MOIS 인구/세대 | 완료 (20,996건, 299지역, 202209~202601) | 빈 응답 4건은 화성시 분구 신설코드 (정상) |
 | ECOS 경제지표 | 완료 | 기준금리, CPI, CSI, ESI |
 | UNSOLD 미분양 | 테스트 수준 | 11건, MOLIT_STAT_API_KEY 별도 키 |
@@ -85,6 +85,7 @@ REB_RONE, STAT_MOLIT, ECOS, HOUSTAT, MOIS, DATA_GO_KR, KB, APPLYHOME
 
 - fact_trade_raw: 14,139,806건 (전체 OK 219,281 / 219,934, 99.7%)
 - LAND_SALE: 일일 한도 1,000건 (개발계정), 잔여 ~17,827건, 약 18일 소요
+- LAND_SALE cron: 매일 00:05 KST, scripts/prefetch_trade_raw.py --region all --types LAND_SALE --max-calls 990
 - 공공데이터포털 한도 리셋: 매일 자정(00:00) KST, API 서비스별 독립 한도
 - MOIS API 제공 시작: 2022-09 (2016~2022-08은 CSV 34회 수동 다운로드 후순위)
 - MOIS region_key 299개 > dim_region 269개 = 강원/전북/화성 신·구 코드 공존
@@ -104,17 +105,17 @@ REB_RONE, STAT_MOLIT, ECOS, HOUSTAT, MOIS, DATA_GO_KR, KB, APPLYHOME
 
 ## 미결/블로커
 - serviceKey 로그 평문 노출 (P1)
-- "API token quota exceeded" 평문 미감지 (P1) — 한도 소진 시 비XML 평문 반환, 현재 None → mark_done(OK,0) 경로. Codex 수정 지시 발행, 결과 대기 중
-- API 429 처리 완료, 평문 감지 미완 (P1) — HTTP 429 + resultCode 22 처리 완료. "API token quota exceeded"/"Unauthorized" 평문 감지 Codex 진행 중
 - serviceKey 인코딩 이슈 (P2) — curl User-Agent 없으면 WAF 차단 확인. Python requests는 정상 동작. 모니터링용 curl 시 -A "Mozilla/5.0" 필수
 - dim_region 자동적재 미구현 (P2)
-- LAND_SALE 수집 미완 (P2) — OK 2,005 / 전체 19,832, 재수집 cron 미설정
+- LAND_SALE 수집 미완 (P2) — OK 2,005 / 전체 19,832, cron 설정 완료 (매일 00:05 KST), 약 18일 소요 예상
 - API 한도 축소 3/5 전후 (적용 범위 미확인)
 - KB 미검증 2종 (P3) — KB_PRICE_INDEX_MONTHLY, KB_PIR
 - 비아파트 dedup 키 과소정의 (Phase 2 전 분석)
 - 신고 지연 데이터 재수집 전략 (P3) — 슬라이딩 윈도우 N개월, ETL 설계 시 결정
 - fact_indicator_month SQLite 스키마 차이 (P3) — inserted_at/updated_at NOT NULL DEFAULT 없음, source CHECK 목록 Landbrief DDL과 불일치
 - 강원/전북 행정코드 변경 매핑 (P2) — dim_region에 신규 코드(51xxx/52xxx)만 존재, 구 코드(42xxx/45xxx) 없음. 리포트 시계열 연결 시 구→신 매핑 필수. 화성시 분구(41591~41597)도 동일 패턴.
+- HTTP 401 연속 N회 조기 중단 미구현 (P3) — 현재 UnexpectedResponseError로 건별 ERROR 처리, 키 문제(지속) 시 호출 낭비 가능. Landbrief ETL 무인 운영 전 구현
+- load_all.py cron 필요 여부 확인 (P3) — 0 3 * * * 매일 실행 중, LandScanner 시절 스크립트 추정, 불필요 시 주석 처리
 
 ## 태스크
 G1 ✅ | G2 DDL ✅ (확정 대기, PG 설치 후 적용) | G3~G10 대기
@@ -122,14 +123,14 @@ G1 ✅ | G2 DDL ✅ (확정 대기, PG 설치 후 적용) | G3~G10 대기
 ## 다음 세션 작업 (우선순위 순)
 
 ### 최우선
-  1. Codex 결과 확인 (평문 감지 Part A 경로 검증 + Part B 수정 + 테스트 5건)
-  2. LAND_SALE 재수집 cron 설정 (자정 이후 자동 실행)
+  1. LAND_SALE cron 첫 실행 결과 확인 (logs/land_sale_cron.log + etl_trade_raw_log 상태)
+  2. load_all.py cron 필요 여부 확인 → 불필요 시 주석 처리
 
 ### 중순위
-  3. DDL 및 문서 업데이트 (source CHECK 8종 반영, 청약홈 DDL, MOLIT_STAT DDL 등)
-  4. 수집 완료 후 전체 데이터 검증 (리모트 SQLite Viewer 실데이터 확인)
+  3. 수집 완료 후 전체 데이터 검증 (리모트 SQLite Viewer 실데이터 확인)
      — NrgTrade cdealtype 소문자 t, AptRent 도로명 소문자, dealAmount 쉼표 등 확인
-  5. UNSOLD 미분양 수집 (MOLIT_STAT API, form_id=2082/5328, 별도 키)
+  4. UNSOLD 미분양 수집 (MOLIT_STAT API, form_id=2082/5328, 별도 키)
+  5. DDL 및 문서 업데이트 (API 실제 응답 데이터 확인 후, source CHECK 8종 반영, 청약홈 DDL, MOLIT_STAT DDL 등)
 
 ### 후순위
   6. 청약홈 API 테스트 호출 + 수집 스크립트
@@ -200,3 +201,33 @@ G1 ✅ | G2 DDL ✅ (확정 대기, PG 설치 후 적용) | G3~G10 대기
 
 **다음: Codex 결과 확인 → LAND_SALE cron 설정 → DDL 업데이트 → 데이터 검증 → UNSOLD·청약홈 수집**
 ```
+### #013 – 2026-02-28 (Session 13)
+
+**UnexpectedResponseError 안전장치 적용**
+- UnexpectedResponseError 예외 클래스 추가 (utils/api_helpers.py:27)
+- call_data_go_kr_api()에서 return None 전량 제거, 모든 비정상 경로 예외 raise로 전환
+  - 비XML 응답(HTML/빈문자열/기타) → UnexpectedResponseError
+  - parse_xml_to_dict() 결과 None → UnexpectedResponseError
+  - HTTPError 429 외 → UnexpectedResponseError
+  - API 키 미설정 → UnexpectedResponseError
+  - 기존 RateLimitError 분기(429, "API token quota exceeded", "Unauthorized") 유지
+- scripts/prefetch_trade_raw.py run()에 UnexpectedResponseError 전용 except 추가 (ERROR 기록 + continue)
+- Codex 테스트 7건 전 PASS (HTML 차단, 빈문자열, quota 평문, 정상 XML, HTTP 500, HTTP 401, py_compile)
+- 커밋: 1d098cd (LandScanner)
+
+**HTTP 401 경로 확인**
+- HTTP 401 + "Unauthorized" → raise_for_status()가 먼저 실행 → HTTPError → UnexpectedResponseError (해당 건 ERROR)
+- HTTP 200 + "Unauthorized" 평문 → 평문 검사 → RateLimitError (즉시 전체 중단)
+- 두 경로 모두 OK,0 방지 확인
+
+**P1 블로커 2건 해소**
+- "API token quota exceeded" 평문 미감지 → 해소 (세션 12 RateLimitError + 세션 13 UnexpectedResponseError)
+- "Unauthorized" 평문 미감지 → 해소 (동일)
+
+**LAND_SALE cron 설정**
+- cron 등록: 매일 00:05 KST, --region all --types LAND_SALE --max-calls 990
+- 로그: ~/real_estate_report/logs/land_sale_cron.log
+- 수동 테스트 시 HTTP 429 발생 (당일 한도 소진 상태), RateLimitError 즉시 중단 정상 동작 확인
+- 첫 실행: 2026-03-01 00:05 KST
+
+**다음: cron 첫 실행 결과 확인 → load_all.py cron 정리 → 데이터 검증 → UNSOLD 수집 → DDL 업데이트**
