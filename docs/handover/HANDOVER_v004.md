@@ -238,3 +238,4 @@ G1 ✅ | G2 DDL ✅ (확정 대기, PG 설치 후 적용) | G3~G10 대기
 - HANDOVER v004 작성
 
 **다음: LAND_SALE 재수집 완료 확인 → ERROR_CODE_HANDLING.md 작성 → 에러 유도 테스트 → DDL 업데이트 → 데이터 검증 → UNSOLD·청약홈 수집**
+
