@@ -1,6 +1,4 @@
----
-
-# Landbrief Handover v003 (2026-02-26)
+# Landbrief Handover v004 (2026-02-28)
 
 **블록 1: HANDOVER(기반 문서)**
 
@@ -9,6 +7,7 @@
 ## 문서 체계
 - INTENT.md (v0.4): 프로젝트 정의/원칙/범위/지표/3트랙 상세. 심화 작업 시 공유.
 - HANDOVER: 현재 상태. 매 세션 공유.
+- API 기술문서 정리: MOLIT_TRADE_API_SPEC.md (실거래 13종) + ECOS_REB_APPLYHOME_ARCHHUB_API_SPEC.md (ECOS·REB·청약홈·건축HUB) + MOLIT_STAT_API_SPEC.md (미분양 2종). 수집 스크립트 개발·ERROR_CODE_HANDLING.md 작성 기반.
 - 코드 레벨 검증: Codex 에이전트에 위임.
 
 ## 프로젝트 요약
@@ -33,8 +32,9 @@ Ubuntu 24.04, i7-10700, 32GB, ssh -p 2222 deploy@122.45.64.200
 - Landbrief: 저장소 미생성, 첫 커밋 cf3d336
 
 ## 확정 12종 지표 (공인기관)
-APT_SALE_DTL, APT_RENT, REB_SALE_PRICE_INDEX, REB_TRADE_VOLUME, REB_RENT_PRICE_INDEX, UNSOLD_UNITS_SIGUNGU, UNSOLD_UNITS_COMPLETED, MACRO_BASE_RATE, HF_PIR, DEMO_POPULATION, DEMO_HOUSEHOLD, SUPPLY_INCOMING
+APT_SALE_DTL, APT_RENT, REB_SALE_PRICE_INDEX, REB_TRADE_VOLUME, REB_RENT_PRICE_INDEX, UNSOLD_UNITS_SIGUNGU, UNSOLD_UNITS_COMPLETED, MACRO_BASE_RATE, HF_PIR(드랍), DEMO_POPULATION, DEMO_HOUSEHOLD, SUPPLY_INCOMING
 
+- HF_PIR 드랍 (세션 11 확정) → 확정 지표 실질 11종
 - SUPPLY_INCOMING 소스: 청약홈 분양정보 API (APPLYHOME, 서비스키 #15098547, odcloud 경유)
 
 ## KB 지표 (PublicDataReader, API키 불필요)
@@ -44,6 +44,20 @@ APT_SALE_DTL, APT_RENT, REB_SALE_PRICE_INDEX, REB_TRADE_VOLUME, REB_RENT_PRICE_I
 ## source CHECK 8종
 REB_RONE, STAT_MOLIT, ECOS, HOUSTAT, MOIS, DATA_GO_KR, KB, APPLYHOME
 
+## API 기술문서 정리 현황 (2026-02-28 기준)
+
+| 소스 | 상태 | 비고 |
+|---|---|---|
+| MOLIT 실거래 13종 (apis.data.go.kr) | ✅ 정리 완료 | MOLIT_TRADE_API_SPEC.md |
+| ECOS 3종 (ecos.bok.or.kr) | ✅ 정리 완료 | 통계표코드(기준금리/CPI/CSI/ESI) 코드에서 확인 필요 |
+| REB R-ONE 3종 (reb.or.kr) | ✅ 정리 완료 | 통계표ID(매매가격지수/거래량/전세가격지수) 미확인 |
+| 청약홈 10종 (api.odcloud.kr) | ✅ 정리 완료 | |
+| MOLIT_STAT 2종 (stat.molit.go.kr) | ✅ 정리 완료 | form_id=2082(미분양), 5328(공사완료후) |
+| 건축HUB 17종 (apis.data.go.kr) | ✅ 정리 완료 | 향후 확장용, 현재 스코프 밖 |
+| MOIS (apis.data.go.kr) | 미정리 (팩트 미확인) | 수집 완료됐으나 기술문서 PDF 없음, Swagger UI 동적 로딩 |
+| HF (주택금융공사) | 드랍 | HF_PIR 지표 자체 드랍 |
+| KB (PublicDataReader) | 별도 경로 | 라이브러리 경유, 공식 기술문서 없음 |
+
 ## 수집 현황 (2026-02-28 기준)
 
 | 데이터 | 상태 | 비고 |
@@ -52,7 +66,6 @@ REB_RONE, STAT_MOLIT, ECOS, HOUSTAT, MOIS, DATA_GO_KR, KB, APPLYHOME
 | 실거래 LAND_SALE | 미완 (OK 1,432 / PENDING 653 / 미실행 ~17,747) | 429 피해 1,049건 PENDING 리셋 완료, 재수집 중 |
 | MOIS 인구/세대 | 완료 (20,996건, 299지역, 202209~202601) | 빈 응답 4건은 화성시 분구 신설코드 (정상) |
 | ECOS 경제지표 | 완료 | 기준금리, CPI, CSI, ESI |
-| HF 지표 | 테스트 수준 | PIR 19건, KHAI 2건 |
 | UNSOLD 미분양 | 테스트 수준 | 11건, MOLIT_STAT_API_KEY 별도 키 |
 | KB 지표 | 미착수 | 메뉴코드 미확인 |
 | 청약홈 분양정보 | 미착수 | 서비스키 신청 완료, 테스트 호출 미실행 |
@@ -94,14 +107,15 @@ G1 ✅ | G2 DDL ✅ (확정 대기, PG 설치 후 적용) | G3~G10 대기
 ## 다음 세션 작업 (우선순위 순)
 
 ### 최우선
-  1. LAND_SALE 재수집 계속 (PENDING 653 + 미실행 ~17,747)
-  2. API 전수조사 — 기술자료 대조 및 에러 유도 테스트 (4개 소스)
-  3. ERROR_CODE_HANDLING.md 작성
+  1. LAND_SALE 재수집 완료 확인
+  2. ERROR_CODE_HANDLING.md 작성 (API 기술문서 정리 완료, 6개 소스 에러코드 통합)
+  3. API 에러코드 에러 유도 테스트 (MOLIT/ECOS/REB/청약홈/MOLIT_STAT)
 
 ### 중순위
-  4. DDL 및 문서 업데이트 (source CHECK 8종 반영, 청약홈 DDL 등)
+  4. DDL 및 문서 업데이트 (source CHECK 8종 반영, 청약홈 DDL, MOLIT_STAT DDL 등)
   5. 수집 완료 후 전체 데이터 검증 (리모트 SQLite Viewer 실데이터 확인)
-  6. UNSOLD 미분양 수집 (MOLIT_STAT API, 별도 키, 전국 일괄)
+     — NrgTrade cdealtype 소문자 t, AptRent 도로명 소문자, dealAmount 쉼표 등 확인
+  6. UNSOLD 미분양 수집 (MOLIT_STAT API, form_id=2082/5328, 별도 키)
 
 ### 후순위
   7. 청약홈 API 테스트 호출 + 수집 스크립트
@@ -117,7 +131,8 @@ G1 ✅ | G2 DDL ✅ (확정 대기, PG 설치 후 적용) | G3~G10 대기
 - dedup COALESCE: NULL → '' (빈문자열) 통일, 숫자 0 치환 안 함
 - 정본 = 코드. 문서 불일치 시 문서 수정.
 - prefetch 실행: --region 기본값 seoul, 전국 수집 시 반드시 --region all 지정
-```
+
+---
 
 **블록 2: CHANGELOG**
 
@@ -171,7 +186,55 @@ G1 ✅ | G2 DDL ✅ (확정 대기, PG 설치 후 적용) | G3~G10 대기
 - MOIS 인구/세대: 검증 완료
 
 **Git**
-- 커밋 fa44dc8: HANDOVER v004 - #010 세션 반영
+- 커밋 91a410a: HANDOVER v004 - #010 세션 반영 (amend)
 - ERROR_CODE_HANDLING.md 미생성
 
 **다음: LAND_SALE 재수집 완료 확인 → API 전수조사·에러코드 테스트 → DDL·문서 업데이트 → 수집 데이터 검증 → UNSOLD·청약홈 수집 (후순위)**
+
+### #011 – 2026-02-28 (Session 11)
+
+**API 기술문서 전수조사 및 규정문서 작성**
+- 6개 소스 기술문서 정리 완료, 3개 MD 파일 생성
+  - MOLIT_TRADE_API_SPEC.md: 실거래 13종 (에러코드 공통 + 엔드포인트 + 응답 필드 전수)
+  - ECOS_REB_APPLYHOME_ARCHHUB_API_SPEC.md: ECOS 3종, REB R-ONE 3종, 청약홈 10종, 건축HUB 17종
+  - MOLIT_STAT_API_SPEC.md: 미분양 2종 (form_id=2082, 5328)
+- 건축HUB 17종은 현재 스코프 밖이나 향후 확장용으로 포함
+
+**API 기술문서 이슈 통합 정리 (30건)**
+- 코드 작업 즉시 영향 6건: NrgTrade cdealtype 소문자 t, AptRent 도로명 소문자, 기술문서 함수명 오기재 3건, 청약홈 날짜 형식·필드명 불일치, 금액 필드 쉼표
+- 에러 처리 관련 10건: HTTP 429 미명시(MOLIT/청약홈), ECOS INFO-100 vs ERROR-100, 각 소스별 한도 초과·빈 응답 코드 매핑
+- DDL/스키마 설계 영향 10건: 단지명·면적 필드명 차이, 청약홈 10종 통합 설계, REB/ECOS 통계표코드 미확인
+- 프로토콜/인프라 4건: http/https 혼재
+
+**4개 소스 에러코드 체계 비교 정리**
+- MOLIT: XML resultCode + HTTP status
+- ECOS: JSON RESULT.CODE (INFO-/ERROR- 접두어)
+- REB: XML/JSON RESULT.CODE (INFO-/ERROR- 접두어)
+- 청약홈: HTTP 상태코드만 (200/401/429/500)
+- MOLIT_STAT: JSON status_code (INFO-/ERROR- 접두어)
+- 통합 처리 원칙 5개 매핑 완료 (소스별)
+
+**MOLIT_STAT (국토교통 통계누리) API 확인**
+- stat.molit.go.kr 웹에서 API 명세 확인 (별도 PDF 없음)
+- 요청 URL: http://stat.molit.go.kr/portal/openapi/service/rest/getList.do
+- 파라미터: key, form_id, style_num, start_dt, end_dt
+- UNSOLD_UNITS_SIGUNGU: form_id=2082 (200012~)
+- UNSOLD_UNITS_COMPLETED: form_id=5328 (200701~)
+- 에러코드 9종 확인 (INFO-000/100/200/300, ERROR-301/334/335/500/600)
+- 한도 초과 에러코드 미명시 (안내문만 존재)
+- MOLIT_STAT_API_KEY 별도 키 사용 (MOLIT 실거래 키와 다름)
+
+**HF_PIR 드랍**
+- HF(주택금융공사) PIR 지표 드랍 확정
+- 확정 12종 → 실질 11종
+
+**MOIS 기술문서 — 패스**
+- 기술문서 PDF 없음, 공공데이터포털 Swagger UI 동적 로딩으로 크롤링 불가
+- apis.data.go.kr 공통 에러코드 체계 적용 추정이나 팩트 미확인 → 규정문서 목적상 패스
+- 수집은 완료 상태, 향후 기술문서 확보 시 정리
+
+**Git**
+- API 기술문서 3개 MD 파일 로컬 생성
+- HANDOVER v004 작성
+
+**다음: LAND_SALE 재수집 완료 확인 → ERROR_CODE_HANDLING.md 작성 → 에러 유도 테스트 → DDL 업데이트 → 데이터 검증 → UNSOLD·청약홈 수집**
