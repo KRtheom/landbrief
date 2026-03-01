@@ -102,7 +102,11 @@ CREATE TABLE fact_trade_raw (
     updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW()
 );
 
--- dedup index (LandScanner 원본 기준, COALESCE 통일)
+-- dedup COALESCE 정책:
+-- NULL -> '' 통일 (Landbrief VARCHAR 저장 정책)
+-- LandScanner(SQLite)는 INTEGER 컬럼 특성상 COALESCE(..., 0) 사용
+-- 목적 동일: NULL 행이 dedup 비교에서 누락되지 않도록 확정값 치환
+-- 타입 환경 차이에 따른 구현 차이이며, 정책 변경 아님
 CREATE UNIQUE INDEX uix_ftr_dedup ON fact_trade_raw (
     trade_type,
     sgg_cd,
