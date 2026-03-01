@@ -1,5 +1,4 @@
 
-```markdown
 # Landbrief Handover v005 (2026-02-28)
 
 **블록 1: HANDOVER(기반 문서)**
