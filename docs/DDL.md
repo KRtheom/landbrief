@@ -1,6 +1,9 @@
 -- ============================================================
--- Landbrief G2 DDL — PostgreSQL
--- Version: 0.2 (2026-02-26)
+-- Landbrief DDL — PostgreSQL
+-- Version: 0.2.1 (2026-03-01)
+-- 변경사항: source_enum 수정(KB 제거, APPLYHOME/ARCH_HUB 추가),
+--          dim_complex 추가, apt_seq 인덱스 추가,
+--          주석 3건(yyyymm, region_key GLOBAL, is_fallback)
 -- ============================================================
 
 -- 1) ENUM types
@@ -16,7 +19,8 @@ CREATE TYPE trade_type_enum AS ENUM (
 );
 
 CREATE TYPE source_enum AS ENUM (
-    'REB_RONE', 'STAT_MOLIT', 'ECOS', 'HOUSTAT', 'MOIS', 'DATA_GO_KR', 'KB'
+    'DATA_GO_KR', 'REB_RONE', 'STAT_MOLIT', 'ECOS',
+    'HOUSTAT', 'MOIS', 'APPLYHOME', 'ARCH_HUB'
 );
 
 CREATE TYPE region_level_enum AS ENUM (
@@ -40,7 +44,27 @@ CREATE TABLE dim_region (
 
 CREATE INDEX idx_region_sido ON dim_region (sido_cd);
 
--- 3) fact_trade_raw
+-- 3) dim_complex
+-- PK: apt_seq (국토부 단지일련번호)
+-- 1차 생성: fact_trade_raw에서 추출
+-- 2차 보강: 건축물대장 API (좌표, 세대수, 공급면적) — Phase 2 전 완료
+CREATE TABLE dim_complex (
+    apt_seq     VARCHAR(30) PRIMARY KEY,
+    bldg_nm     VARCHAR(200) NOT NULL,
+    sgg_cd      CHAR(5)     NOT NULL REFERENCES dim_region(sgg_cd),
+    umd_nm      VARCHAR(100),
+    lat         NUMERIC,
+    lng         NUMERIC,
+    households  INTEGER,
+    supply_ar   NUMERIC,
+    built_year  SMALLINT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_complex_sgg ON dim_complex (sgg_cd);
+
+-- 4) fact_trade_raw
 CREATE TABLE fact_trade_raw (
     id                  BIGSERIAL       PRIMARY KEY,
     trade_type          trade_type_enum NOT NULL,
@@ -96,7 +120,12 @@ CREATE TABLE fact_trade_raw (
     buyer_gbn           VARCHAR(20),
     ownership_gbn       VARCHAR(20),
     land_ar             VARCHAR(20),
+
+    -- yyyymm: API 요청 파라미터 DEAL_YMD 원본 저장.
+    -- deal_year/deal_month는 API 응답 필드.
+    -- deal_year || LPAD(deal_month) 파생이 아님.
     yyyymm              CHAR(6)         NOT NULL,
+
     source              source_enum     NOT NULL DEFAULT 'DATA_GO_KR',
     created_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     updated_at          TIMESTAMPTZ     NOT NULL DEFAULT NOW()
@@ -125,8 +154,12 @@ CREATE UNIQUE INDEX uix_ftr_dedup ON fact_trade_raw (
 -- 조회용 인덱스
 CREATE INDEX idx_ftr_lookup ON fact_trade_raw (trade_type, sgg_cd, yyyymm);
 CREATE INDEX idx_ftr_bldg   ON fact_trade_raw (trade_type, sgg_cd, bldg_nm);
+CREATE INDEX idx_ftr_aptseq ON fact_trade_raw (trade_type, apt_seq, yyyymm);
 
--- 4) fact_indicator_month
+-- 5) fact_indicator_month
+--
+-- is_fallback: 0=실측값, 1=이월/보간값. SMALLINT 유지 (확장 여지).
+-- region_key GLOBAL 규칙: region_level='GLOBAL'일 때 region_key='00000'.
 CREATE TABLE fact_indicator_month (
     id              BIGSERIAL           PRIMARY KEY,
     indicator_code  VARCHAR(50)         NOT NULL,
@@ -147,7 +180,7 @@ CREATE UNIQUE INDEX uix_fim_dedup ON fact_indicator_month (
 
 CREATE INDEX idx_fim_lookup ON fact_indicator_month (indicator_code, region_key, yyyymm);
 
--- 5) etl_log
+-- 6) etl_log
 CREATE TABLE etl_log (
     id              BIGSERIAL       PRIMARY KEY,
     job_type        VARCHAR(50)     NOT NULL,
@@ -163,7 +196,7 @@ CREATE TABLE etl_log (
 
 CREATE INDEX idx_etl_job ON etl_log (job_type, status, started_at DESC);
 
--- 6) updated_at 자동 갱신 트리거
+-- 7) updated_at 자동 갱신 트리거
 CREATE OR REPLACE FUNCTION fn_set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -177,6 +210,10 @@ CREATE TRIGGER trg_region_updated
     BEFORE UPDATE ON dim_region
     FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
 
+CREATE TRIGGER trg_complex_updated
+    BEFORE UPDATE ON dim_complex
+    FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+
 CREATE TRIGGER trg_ftr_updated
     BEFORE UPDATE ON fact_trade_raw
     FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
@@ -184,3 +221,19 @@ CREATE TRIGGER trg_ftr_updated
 CREATE TRIGGER trg_fim_updated
     BEFORE UPDATE ON fact_indicator_month
     FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+
+
+###v0.2 대비 변경 요약:
+
+source_enum — KB 제거, APPLYHOME·ARCH_HUB 추가. HOUSTAT 유지.
+
+dim_complex 신규 — apt_seq PK, supply_ar(공급면적) 포함, lat/lng/households/built_year nullable, sgg_cd FK.
+
+idx_ftr_aptseq 신규 — trade_type + apt_seq + yyyymm 복합 인덱스. 단지별 시트 조회용.
+
+주석 3건 — yyyymm 저장 규칙, is_fallback 의미, region_key GLOBAL='00000' 규칙.
+
+trg_complex_updated 신규 — dim_complex용 updated_at 트리거.
+
+calendar_month는 ENGINE.md 설계 후 DDL v0.3에서 추가합니다.
+###
